@@ -28,6 +28,8 @@
     "streamAnalyticsJobName": "[concat(resourceGroup().name,'-', 'alerts-sa-job')]",
     "cosmosDbName": "[concat('cosmosdb','-',uniqueString(resourceGroup().id))]",
     "serviceBusNamespaceName": "[toLower(concat(uniqueString(resourceGroup().id),'-','sb-namespace'))]",
+    "topicAuthRuleResourceId": "[resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', variables('serviceBusNamespaceName'), 'TopicSenderAccessKey')]",
+    "subscriptionAuthRuleResourceId": "[resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', variables('serviceBusNamespaceName'), 'SubscriptionListenerAccessKey')]",
     "serviceBusTopicName": "alerts",
     "serviceBusTopicSubscriptionName": "alerts-subscription"
   },
@@ -66,13 +68,39 @@
             {
               "apiVersion": "2015-08-01",
               "name": "[variables('serviceBusTopicSubscriptionName')]",
-              "type": "Subscriptions",
+              "type": "subscriptions",
               "dependsOn": [
                 "[variables('serviceBusTopicName')]"
               ],
               "properties": {},
               "resources": []
             }
+          ]
+        },
+        {
+          "apiVersion": "2015-08-01",
+          "type": "AuthorizationRules",
+          "name": "TopicSenderAccessKey",
+          "properties": {
+            "rights": [
+              "Send"
+            ]
+          },
+          "dependsOn": [
+            "[concat('Microsoft.ServiceBus/namespaces/', variables('serviceBusNamespaceName'))]"
+          ]
+        },
+        {
+          "apiVersion": "2015-08-01",
+          "type": "AuthorizationRules",
+          "name": "SubscriptionListenerAccessKey",
+          "properties": {
+            "rights": [
+              "Listen"
+            ]
+          },
+          "dependsOn": [
+            "[concat('Microsoft.ServiceBus/namespaces/', variables('serviceBusNamespaceName'))]"
           ]
         }
       ]
@@ -99,5 +127,14 @@
       "dependsOn": []
     }
   ],
-  "outputs": {}
+  "outputs": {
+    "topicSenderServiceBusConnectionString": {
+      "type": "string",
+      "value": "[listkeys(variables('topicAuthRuleResourceId'), '2015-08-01').primaryConnectionString]"
+    },
+    "subscriptionListenerServiceBusConnectionString": {
+      "type": "string",
+      "value": "[listkeys(variables('subscriptionAuthRuleResourceId'), '2015-08-01').primaryKey]"
+    }
+  }
 }
