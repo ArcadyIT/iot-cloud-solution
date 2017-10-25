@@ -2,34 +2,7 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "streamAnalyticsJobName": {
-      "type": "string",
-      "minLength": 3,
-      "maxLength": 63,
-      "metadata": {
-        "description": "Stream Analytics Job Name, can contain alphanumeric characters and hypen and must be 3-63 characters long"
-      }
-    },
-    "serviceBusNamespaceName": {
-      "type": "string",
-      "metadata": {
-        "description": "Name of the Service Bus Namespace"
-      }
-    },
-    "serviceBusTopicName": {
-      "type": "string",
-      "metadata": {
-        "description": "Name of the Service Bus Topic"
-      }
-    },
-    "iotHubName": {
-      "type": "string",
-      "minLength": 3,
-      "metadata": {
-        "description": "Name of the IoT Hub instance to provision."
-      }
-    },
-    "skuName": {
+    "iotHubSkuName": {
       "type": "string",
       "allowedValues": [
         "F1",
@@ -41,7 +14,7 @@
         "description": "One of the supported SKUs: F1, S1 or S2"
       }
     },
-    "capacityUnits": {
+    "iotHubCapacityUnits": {
       "type": "int",
       "minValue": 1,
       "defaultValue": 1,
@@ -50,16 +23,23 @@
       }
     }
   },
-  "variables": {},
+  "variables": {
+    "iotHubName": "[toLower(concat(uniqueString(resourceGroup().id),'-','iothub'))]",
+    "streamAnalyticsJobName": "[concat(resourceGroup().name,'-', 'alerts-sa-job')]",
+    "cosmosDbName": "[concat('cosmosdb','-',uniqueString(resourceGroup().id))]",
+    "serviceBusNamespaceName": "[toLower(concat(uniqueString(resourceGroup().id),'-','sb-namespace'))]",
+    "serviceBusTopicName": "alerts",
+    "serviceBusTopicSubscriptionName": "alerts-subscription"
+  },
   "resources": [
     {
       "type": "Microsoft.Devices/IotHubs",
       "apiVersion": "2016-02-03",
       "location": "[resourceGroup().location]",
-      "name": "[parameters('iotHubName')]",
+      "name": "[variables('iotHubName')]",
       "sku": {
-        "name": "[parameters('skuName')]",
-        "capacity": "[parameters('capacityUnits')]"
+        "name": "[parameters('iotHubSkuName')]",
+        "capacity": "[parameters('iotHubCapacityUnits')]"
       },
       "properties": {
 
@@ -67,70 +47,57 @@
     },
     {
       "apiVersion": "2015-08-01",
-      "name": "[parameters('serviceBusNamespaceName')]",
+      "name": "[variables('serviceBusNamespaceName')]",
       "type": "Microsoft.ServiceBus/namespaces",
       "location": "[resourceGroup().location]",
       "properties": {},
       "resources": [
         {
           "apiVersion": "2015-08-01",
-          "name": "[parameters('serviceBusTopicName')]",
+          "name": "[variables('serviceBusTopicName')]",
           "type": "topics",
           "dependsOn": [
-            "[concat('Microsoft.ServiceBus/namespaces/', parameters('serviceBusNamespaceName'))]"
+            "[concat('Microsoft.ServiceBus/namespaces/', variables('serviceBusNamespaceName'))]"
           ],
           "properties": {
-            "path": "[parameters('serviceBusTopicName')]"
+            "path": "[variables('serviceBusTopicName')]"
           },
-          "resources": []
+          "resources": [
+            {
+              "apiVersion": "2015-08-01",
+              "name": "[variables('serviceBusTopicSubscriptionName')]",
+              "type": "Subscriptions",
+              "dependsOn": [
+                "[variables('serviceBusTopicName')]"
+              ],
+              "properties": {},
+              "resources": []
+            }
+          ]
         }
       ]
     },
     {
-      "type": "Microsoft.StreamAnalytics/StreamingJobs",
-      "apiVersion": "2016-03-01",
-      "name": "[parameters('streamAnalyticsJobName')]",
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "sku": {
-          "name": "Standard"
-        },
-        "outputErrorPolicy": "stop",
-        "eventsOutOfOrderPolicy": "adjust",
-        "eventsOutOfOrderMaxDelayInSeconds": 0,
-        "eventsLateArrivalMaxDelayInSeconds": 5,
-        "dataLocale": "en-US",
-        "inputs": [],
-        "transformation": {
-          "name": "Transformation",
-          "properties": {
-            "streamingUnits": 1,
-            "query": "SELECT\r\n    *\r\nINTO\r\n    [YourOutputAlias]\r\nFROM\r\n    [YourInputAlias]"
-          }
-        }
-      }
-    },
-    {
       "type": "Microsoft.DocumentDB/databaseAccounts",
       "kind": "GlobalDocumentDB",
-      "name": "[parameters('databaseAccounts_arcady_iot_name_1')]",
+      "name": "[variables('cosmosDbName')]",
       "apiVersion": "2015-04-08",
       "location": "West Europe",
       "tags": {
-          "defaultExperience": "DocumentDB"
+        "defaultExperience": "DocumentDB"
       },
       "scale": null,
       "properties": {
-          "databaseAccountOfferType": "Standard",
-          "consistencyPolicy": {
-              "defaultConsistencyLevel": "Session",
-              "maxIntervalInSeconds": 5,
-              "maxStalenessPrefix": 100
-          },
-          "name": "[parameters('databaseAccounts_arcady_iot_name')]"
+        "databaseAccountOfferType": "Standard",
+        "consistencyPolicy": {
+          "defaultConsistencyLevel": "Session",
+          "maxIntervalInSeconds": 5,
+          "maxStalenessPrefix": 100
+        },
+        "name": "[variables('cosmosDbName')]"
       },
       "dependsOn": []
-  }
+    }
   ],
   "outputs": {}
 }
